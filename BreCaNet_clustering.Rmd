@@ -19,22 +19,89 @@ library(Biobase)
 library(caret)
 
 #other libraries
+library(tidyverse)
 
 ```
 
-```{r}
-
+#```{r}
 # HowTo
 browseVignettes("genefu")
+#```
+
+```{r}
+# reads in the necessary data
+
+geneExpFile = read.csv("/Users/ursulawidocki/Desktop/BreCaNet/Data/PANDAinput/PANDAgeneExp.txt", sep = "\t", header = FALSE) # reads in exp file
+
+# need this for geneFu
+data(mod1)
 ```
 
 ```{r}
+# preps data from expression file
 
-subtypePred <- molecular.subtyping(sbt.model = "scmod2", data = ddata, annot = dannot,do.mapping = TRUE)
-# sbt.model = "pam50"
+# prepares gene labels
+geneNames <- as.data.frame(geneExpFile[,1]) # gets gene names
+colnames(geneNames) <- c("EntrezGene.ID") # adds gene header
+geneLab <- as.data.frame(as.character(seq(1:nrow(geneNames))))
+.rowNamesDF(geneNames, make.names = F) <- as.vector(geneLab)
+
+# prepares expression data
+data <- as.matrix(geneExpFile[,2:dim(geneExpFile)[2]]) # gets expression data
+data <- t(data) # makes genes columns and samples rows
+sampNames <- as.data.frame(as.character(seq(1:nrow(data))))
+dimnames(data) <- as.list(sampNames, geneNames) # labels data
+
 
 
 ```
+
+```{r}
+dim(data)
+dim(sampNames)
+dim(geneNames)
+dim(geneLab)
+```
+
+sbt.model = ssp2006
+  ssp2006 is the most updated version of the classifier that uses clinical parameters (ie. IHC)
+  
+sbt.model = scmgene
+  uses ESR1, ERBB2, and AURKA to subtype
+  
+  
+scTransbig.exprs <- subtype.cluster(module.ESR1 = mod1$ESR1, 
+                                    module.ERBB2=mod1$ERBB2, 
+                                    module.AURKA = mod1$AURKA, data = new.exp, 
+                                    annot = annot.expos, do.mapping = F, do.scale = F, plot = T, verbose = T)  
+                                    
+                                    
+```{r}
+
+dimnames(data)
+
+
+```
+                                    
+  
+```{r}
+
+subtype_expr <- subtype.cluster(module.ESR1 = mod1$ESR1, module.ERBB2 = mod1$ERBB2, module.AURKA = mod1$AURKA, data = data, annot = geneNames, do.mapping = F, do.scale = F, plot = T, verbose = T)
+
+
+
+```
+  
+  
+
+```{r}
+
+subtypePred <- molecular.subtyping(sbt.model = c("AIMS"), data = data, annot = geneNames, verbose = T, do.mapping = F)
+
+
+```
+
+module.gene -> 
 
 #Get sample counts pertaining to each subtype
 table(SubtypePredictions$subtype)
