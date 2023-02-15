@@ -1,0 +1,465 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+```
+
+```{r}
+library(limma)
+library(edgeR)
+library(tidyverse)
+```
+
+```{r}
+#browseVignettes("edgeR")
+#edgeRUsersGuide()
+
+```
+
+```{r}
+## Reads in raw data
+
+ref_col_path = '/Users/ursulawidocki/Desktop/BreCaNet/Data/PANDAinput/all_labels.txt'
+all_expPath = '/Users/ursulawidocki/Desktop/BreCaNet/Data/PANDAinput/all_exp_HTSeq.txt'
+#all_expPath = '/Users/ursulawidocki/Desktop/BreCaNet/Data/PANDAinput/all_exp_HTSeq2.txt'
+
+all_exp <- read.delim(all_expPath, stringsAsFactors = FALSE, check.names = T)
+refColumn <- read.delim(ref_col_path, stringsAsFactors = FALSE, check.names = T, header = F)
+```
+
+### Luminal A vs. All other subtypes
+
+```{r}
+## Sets up for DE analysis
+
+genes <- rownames(all_exp)
+all_exp <-  matrix(unlist(all_exp), ncol = dim(all_exp)[2], byrow = TRUE)
+
+ref_col <- data.frame(refColumn, row.names = 1)
+ref_vector <- c(ref_col[,1])
+
+# LumA = 1
+bool_lumA <- ref_vector == "LumA"
+bool_lumA <- as.numeric(bool_lumA)
+# LumB = 2
+bool_lumB <- ref_vector == "LumB"
+bool_lumB <- as.numeric(bool_lumB)
+bool_lumB <- bool_lumB * 2
+# Basal = 3
+bool_basal <- ref_vector == "Basal"
+bool_basal <- as.numeric(bool_basal)
+bool_basal <- bool_basal * 3
+# HER2 = 4
+bool_her2 <- ref_vector == "Her2"
+bool_her2 <- as.numeric(bool_her2)
+bool_her2 <- bool_her2 * 4
+# Normal = 5
+bool_norm <- ref_vector == "Normal"
+bool_norm <- as.numeric(bool_norm)
+bool_norm <- bool_norm * 5
+
+new_ref <- bool_norm + bool_lumA + bool_lumB + bool_basal + bool_her2
+new_ref <- as.factor(new_ref)
+
+d_A <- DGEList(counts=all_exp, group = new_ref, genes = genes)
+
+```
+
+```{r}
+
+which("ENSG00000091831" %in% genes)
+
+which("ENSG00000141736" %in% genes)
+
+which("ENSG00000087586" %in% genes)
+```
+
+
+```{r}
+## Filtering
+# keeps genes that are expressed by at least 1cpm in at least two samples
+
+countsPerMillion <- cpm(d_A)
+
+countCheck <- countsPerMillion > 1
+keep <- which(rowSums(countCheck) >= 2)
+d_keep <- d_A[keep,]
+#summary(cpm(d_keep)) #compare this to the original summary
+
+# how many genes were removed?
+28873 - 27458
+
+## Normalization
+# implements TMM normalization
+
+d_TMM <- calcNormFactors(d_keep, method="TMM")
+
+# plot of inter-sample relationships based on multidimentional scaling
+#plotMDS(d_TMM)
+
+## Setting up the Model
+# the design matrix describes the set up of the experiment
+
+design = model.matrix(object = ~new_ref)
+
+## Estimates dispersion
+
+# gets common estimate across all genes
+diff_gene_List <- estimateGLMCommonDisp(d_TMM, design=design) 
+# fits an estimate based on mean-variance trend across the dataset (trended dispersion)
+diff_gene_List <- estimateGLMTrendedDisp(diff_gene_List, design=design) 
+# gets genewise dispersion (tagwise dispersion)
+diff_gene_List <- estimateGLMTagwiseDisp(diff_gene_List, design=design) 
+
+#plotBCV(diff_gene_List)
+
+## Differential Expression
+
+f <- glmFit(diff_gene_List, design) # fits a NB log-linear model to the counts for each gene
+lrt_f <- glmLRT(f, coef=2:5) # conducts genewise statistical tests for coefficients
+#topTags(lrt_f)
+
+#edgeR_results <- topTags(lrt_f)
+
+results <- topTags(lrt_f,n=27458)$table # table of top DE genes
+
+```
+```{r}
+plot(results$FDR)
+```
+
+```{r}
+
+DE_list <- results[1:820,]
+```
+
+
+### Luminal B to all other subtypes
+```{r}
+# LumB = 1
+bool_lumB <- ref_vector == "LumB"
+bool_lumB <- as.numeric(bool_lumB)
+# LumA = 2
+bool_lumA <- ref_vector == "LumA"
+bool_lumA <- as.numeric(bool_lumA)
+bool_lumA <- bool_lumA * 2
+# Basal = 3
+bool_basal <- ref_vector == "Basal"
+bool_basal <- as.numeric(bool_basal)
+bool_basal <- bool_basal * 3
+# HER2 = 4
+bool_her2 <- ref_vector == "Her2"
+bool_her2 <- as.numeric(bool_her2)
+bool_her2 <- bool_her2 * 4
+# Norm = 5
+bool_norm <- ref_vector == "Normal"
+bool_norm <- as.numeric(bool_norm)
+bool_norm <- bool_norm * 5
+
+new_ref <- bool_norm + bool_lumA + bool_lumB + bool_basal + bool_her2
+new_ref <- as.factor(new_ref)
+
+d_B <- DGEList(counts=all_exp, group = new_ref, genes = genes)
+```
+
+```{r}
+## Filtering
+# keeps genes that are expressed by at least 1cpm in at least two samples
+
+countsPerMillion <- cpm(d_B)
+#summary(countsPerMillion)
+
+countCheck <- countsPerMillion > 100
+keep <- which(rowSums(countCheck) >= 100)
+d_keep <- d_B[keep,]
+#summary(cpm(d_keep)) #compare this to the original summary
+
+# how many genes were removed?
+
+## Normalization
+# implements TMM normalization
+
+d_TMM <- calcNormFactors(d_keep, method="TMM")
+
+## Setting up the Model
+# the design matrix describes the set up of the experiment
+
+design = model.matrix(object = ~new_ref)
+
+## Estimates dispersion
+
+# gets common estimate across all genes
+diff_gene_List <- estimateGLMCommonDisp(d_TMM, design=design) 
+# fits an estimate based on mean-variance trend across the dataset (trended dispersion)
+diff_gene_List <- estimateGLMTrendedDisp(diff_gene_List, design=design) 
+# gets genewise dispersion (tagwise dispersion)
+diff_gene_List <- estimateGLMTagwiseDisp(diff_gene_List, design=design) 
+
+## Differential Expression
+
+f <- glmFit(diff_gene_List, design) # fits a NB log-linear model to the counts for each gene
+lrt_f <- glmLRT(f, coef=2:5) # conducts genewise statistical tests for coefficients
+#topTags(lrt_f)
+
+results <- topTags(lrt_f,n=1000)$table # table of top DE genes
+
+results %>% filter(FDR < 0.0001)
+```
+
+
+### Basal to all other subtypes
+```{r}
+## Sets up for DE analysis
+
+# Basal = 1
+bool_basal <- ref_vector == "Basal"
+bool_basal <- as.numeric(bool_basal)
+# LumA = 2
+bool_lumA <- ref_vector == "LumA"
+bool_lumA <- as.numeric(bool_lumA)
+bool_lumA <- bool_lumA * 2
+# LumB = 3
+bool_lumB <- ref_vector == "LumB"
+bool_lumB <- as.numeric(bool_lumB)
+bool_lumB <- bool_lumB * 3
+# HER2 = 4
+bool_her2 <- ref_vector == "Her2"
+bool_her2 <- as.numeric(bool_her2)
+bool_her2 <- bool_her2 * 4
+# Normal = 5
+bool_norm <- ref_vector == "Normal"
+bool_norm <- as.numeric(bool_norm)
+bool_norm <- bool_norm * 5
+
+new_ref <- bool_norm + bool_lumA + bool_lumB + bool_basal + bool_her2
+new_ref <- as.factor(new_ref)
+
+d_b <- DGEList(counts=all_exp, group = new_ref, genes = genes)
+
+```
+
+```{r}
+## Filtering
+# keeps genes that are expressed by at least 1cpm in at least two samples
+
+countsPerMillion <- cpm(d_b)
+#summary(countsPerMillion)
+
+countCheck <- countsPerMillion > 1
+keep <- which(rowSums(countCheck) >= 2)
+d_keep <- d_b[keep,]
+#summary(cpm(d_keep)) #compare this to the original summary
+
+# how many genes were removed?
+
+## Normalization
+# implements TMM normalization
+
+d_TMM <- calcNormFactors(d_keep, method="TMM")
+
+## Setting up the Model
+# the design matrix describes the set up of the experiment
+
+design = model.matrix(object = ~new_ref)
+
+## Estimates dispersion
+
+# gets common estimate across all genes
+diff_gene_List <- estimateGLMCommonDisp(d_TMM, design=design) 
+# fits an estimate based on mean-variance trend across the dataset (trended dispersion)
+diff_gene_List <- estimateGLMTrendedDisp(diff_gene_List, design=design) 
+# gets genewise dispersion (tagwise dispersion)
+diff_gene_List <- estimateGLMTagwiseDisp(diff_gene_List, design=design) 
+
+## Differential Expression
+
+f <- glmFit(diff_gene_List, design) # fits a NB log-linear model to the counts for each gene
+lrt_f <- glmLRT(f, coef=2:4) # conducts genewise statistical tests for coefficients
+topTags(lrt_f)
+
+edgeR_results <- topTags(lrt_f)
+
+topTags(lrt_f, n=100)$table # table of top DE genes
+```
+
+### HER2 vs. all other subtypes
+```{r}
+## Sets up for DE analysis
+
+# HER2 = 1
+bool_her2 <- ref_vector == "Her2"
+bool_her2 <- as.numeric(bool_her2)
+# LumA = 2
+bool_lumA <- ref_vector == "LumA"
+bool_lumA <- as.numeric(bool_lumA)
+bool_lumA <- bool_lumA * 2
+# LumB = 3
+bool_lumB <- ref_vector == "LumB"
+bool_lumB <- as.numeric(bool_lumB)
+bool_lumB <- bool_lumB * 3
+# Basal = 4
+bool_her2 <- ref_vector == "Basal"
+bool_her2 <- as.numeric(bool_her2)
+bool_her2 <- bool_her2 * 4
+# Normal = 5
+bool_norm <- ref_vector == "Normal"
+bool_norm <- as.numeric(bool_norm)
+bool_norm <- bool_norm * 5
+
+new_ref <- bool_norm + bool_lumA + bool_lumB + bool_basal + bool_her2
+new_ref <- as.factor(new_ref)
+
+d_h <- DGEList(counts=all_exp, group = new_ref, genes = genes)
+```
+
+```{r}
+## Filtering
+# keeps genes that are expressed by at least 1cpm in at least two samples
+
+countsPerMillion <- cpm(d_h)
+#summary(countsPerMillion)
+
+countCheck <- countsPerMillion > 1
+keep <- which(rowSums(countCheck) >= 2)
+d_keep <- d_h[keep,]
+#summary(cpm(d_keep)) #compare this to the original summary
+
+# how many genes were removed?
+
+## Normalization
+# implements TMM normalization
+
+d_TMM <- calcNormFactors(d_keep, method="TMM")
+
+## Setting up the Model
+# the design matrix describes the set up of the experiment
+
+design = model.matrix(object = ~new_ref)
+
+## Estimates dispersion
+
+# gets common estimate across all genes
+diff_gene_List <- estimateGLMCommonDisp(d_TMM, design=design) 
+# fits an estimate based on mean-variance trend across the dataset (trended dispersion)
+diff_gene_List <- estimateGLMTrendedDisp(diff_gene_List, design=design) 
+# gets genewise dispersion (tagwise dispersion)
+diff_gene_List <- estimateGLMTagwiseDisp(diff_gene_List, design=design) 
+
+## Differential Expression
+
+f <- glmFit(diff_gene_List, design) # fits a NB log-linear model to the counts for each gene
+lrt_f <- glmLRT(f, coef=2:4) # conducts genewise statistical tests for coefficients
+topTags(lrt_f)
+
+edgeR_results <- topTags(lrt_f)
+
+topTags(lrt_f, n=100)$table # table of top DE genes
+```
+
+
+### Normal-like vs all subtypes
+```{r}
+## Sets up for DE analysis
+
+# Normal = 1
+bool_norm <- ref_vector == "Normal"
+bool_norm <- as.numeric(bool_norm)
+# LumA = 2
+bool_lumA <- ref_vector == "LumA"
+bool_lumA <- as.numeric(bool_lumA)
+bool_lumA <- bool_lumA * 2
+# LumB = 3
+bool_lumB <- ref_vector == "LumB"
+bool_lumB <- as.numeric(bool_lumB)
+bool_lumB <- bool_lumB * 3
+# Basal = 4
+bool_her2 <- ref_vector == "Basal"
+bool_her2 <- as.numeric(bool_her2)
+bool_her2 <- bool_her2 * 4
+# HER2 = 5
+bool_her2 <- ref_vector == "Her2"
+bool_her2 <- as.numeric(bool_her2)
+bool_her2 <- bool_her2 * 5
+
+new_ref <- bool_norm + bool_lumA + bool_lumB + bool_basal + bool_her2
+new_ref <- as.factor(new_ref)
+
+d_n <- DGEList(counts=all_exp, group = new_ref, genes = genes)
+```
+
+```{r}
+## Filtering
+# keeps genes that are expressed by at least 1cpm in at least two samples
+
+countsPerMillion <- cpm(d_n)
+#summary(countsPerMillion)
+
+countCheck <- countsPerMillion > 1
+keep <- which(rowSums(countCheck) >= 2)
+d_keep <- d_n[keep,]
+#summary(cpm(d_keep)) #compare this to the original summary
+
+# how many genes were removed?
+
+## Normalization
+# implements TMM normalization
+
+d_TMM <- calcNormFactors(d_keep, method="TMM")
+
+## Setting up the Model
+# the design matrix describes the set up of the experiment
+
+design = model.matrix(object = ~new_ref)
+
+## Estimates dispersion
+
+# gets common estimate across all genes
+diff_gene_List <- estimateGLMCommonDisp(d_TMM, design=design) 
+# fits an estimate based on mean-variance trend across the dataset (trended dispersion)
+diff_gene_List <- estimateGLMTrendedDisp(diff_gene_List, design=design) 
+# gets genewise dispersion (tagwise dispersion)
+diff_gene_List <- estimateGLMTagwiseDisp(diff_gene_List, design=design) 
+
+## Differential Expression
+
+f <- glmFit(diff_gene_List, design) # fits a NB log-linear model to the counts for each gene
+lrt_f <- glmLRT(f, coef=2:4) # conducts genewise statistical tests for coefficients
+topTags(lrt_f)
+
+edgeR_results <- topTags(lrt_f)
+
+topTags(lrt_f, n=1500)$table # table of top DE genes
+```
+
+
+
+
+############################# Code I'm not using
+```{r}
+## from the video https://www.youtube.com/watch?v=NVDDWEEV5B4&list=TLPQMDQwNDIwMjBSpYtgUDOmlA&index=2
+
+et <- exactTest(diff_gene_List)
+etp <- topTags(et, n = 10000)
+summary(etp$table)
+
+etp$table$logFC = -etp$table$logFC
+plot(etp$table$logCPM, etp$table$logFC, xlim = c(-15,15), ylim = c(-15,15), pch = 20, cex = 0.3, col = (ifelse(etp$table$FDR < 0.05, "red", "black")))
+#plot(etp$table$logCPM, etp$table$logFC, xlim = c(-5,10), ylim = c(-15,15), pch = 20, cex = 0.3)
+
+# histogram of p-values
+hist(topTags(lrt_f, n=10000)$table$PValue)
+
+hist(topTags(lrt_f, n=10000)$table$FDR)
+
+deGenes_f <- decideTestsDGE(lrt_f, p=0.0001)
+deGenes_f <- rownames(lrt_f)[as.logical(deGenes_f)]
+deGenes_f
+```
+
+
+
+

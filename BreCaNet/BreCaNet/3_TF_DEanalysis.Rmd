@@ -1,0 +1,522 @@
+---
+title: "3_TF_DEanalysis"
+author: "Ursula Widocki"
+date: "4/30/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+```
+
+```{r}
+library(limma)
+#library(edgeR)
+library(tidyverse)
+#library(Glimma)
+
+```
+
+```{r}
+## Reads in data
+
+ref_col_path = '/Users/ursulawidocki/Desktop/BreCaNet/Data/PANDAinput/all_labels.txt' # reference column
+refColumn <- read.delim(ref_col_path, stringsAsFactors = F, check.names = T, header = F)
+
+all_expPath = '/Users/ursulawidocki/Desktop/BreCaNet/Data/PANDAinput/all_exp_HTSeq.txt' # expression data
+all_exp <- read.delim(all_expPath, stringsAsFactors = F, check.names = T)
+
+TFBM = "/Users/ursulawidocki/Desktop/BreCaNet/Data/motif.txt" # TFBM
+TFBM <- read.delim(TFBM, stringsAsFactors = F, header=F)
+colnames(TFBM) <- unlist(c("TF", "gene", "link"))
+
+geneNames_path = "/Users/ursulawidocki/Desktop/BreCaNet/Data/geneNames.txt"
+genes <- read.delim(geneNames_path, stringsAsFactors = T, header=F)[-1,1:2]
+colnames(genes) <- c("ENS", "ID")
+
+
+```
+
+```{r}
+## Sets up expression data
+
+ENS_ID <- as.data.frame(rownames(all_exp)) # ENS ids in all_exp
+colnames(ENS_ID) <- c("ENS")
+
+temp <- as.data.frame(genes$ID[match(ENS_ID$ENS, genes$ENS)]) # gene IDs corresponding to ENS_ID
+colnames(temp) <- c("ID")
+
+bool_na_gene <- which(is.na(temp$ID))
+
+all_exp2 <- all_exp[-c(bool_na_gene),]
+temp <- as.data.frame(temp[complete.cases(temp), ])
+colnames(temp) <- c("ID")
+
+rownames(all_exp2)<- temp$ID # converts names in 
+
+new_exp <- all_exp2[which(rownames(all_exp2) %in% TFBM$TF),] # gets rows of TF genes
+
+```
+
+
+# LumA TFs against all other TFs
+
+```{r}
+## Set up for DE
+TFs <- rownames(new_exp)
+exp_final <-  matrix(unlist(new_exp), ncol = dim(new_exp)[2], byrow = TRUE)
+ref_col <- data.frame(refColumn, row.names = 1)
+ref_vector <- c(ref_col[,1])
+
+# LumA = 1
+bool_lumA <- ref_vector == "LumA"
+bool_lumA <- as.numeric(bool_lumA)
+# LumB = 2
+bool_lumB <- ref_vector == "LumB"
+bool_lumB <- as.numeric(bool_lumB)
+bool_lumB <- bool_lumB * 2
+# Basal = 2
+bool_basal <- ref_vector == "Basal"
+bool_basal <- as.numeric(bool_basal)
+bool_basal <- bool_basal * 2
+# HER2 = 2
+bool_her2 <- ref_vector == "Her2"
+bool_her2 <- as.numeric(bool_her2)
+bool_her2 <- bool_her2 * 2
+# Normal = 2
+bool_norm <- ref_vector == "Normal"
+bool_norm <- as.numeric(bool_norm)
+bool_norm <- bool_norm * 2
+
+new_ref <- bool_norm + bool_lumA + bool_lumB + bool_basal + bool_her2
+new_ref <- as.factor(new_ref)
+colnames(exp_final) <- new_ref
+rownames(exp_final) <- TFs
+
+d_A <- DGEList(counts=exp_final, group = new_ref, genes = TFs)
+#d_A
+```
+
+```{r}
+## Pre-processing
+
+# Removes lowly expressed genes
+countsPerMillion <- cpm(d_A)
+countCheck <- countsPerMillion > 1
+keep <- which(rowSums(countCheck) >= 2)
+d_keep <- d_A[keep,]
+#summary(cpm(d_keep)) 
+# how many genes were removed? 639 - 608 = 631
+
+
+# Normalization
+d_TMM <- calcNormFactors(d_keep, method="TMM")
+
+# plot of inter-sample relationships based on multidimentional scaling
+#plotMDS(d_TMM)
+
+## Setting up the Model
+# the design matrix describes the set up of the experiment
+
+design = model.matrix(object = ~new_ref)
+
+```
+
+## Run the DE analysis
+```{r}
+fit <- lmFit(exp_final, design) # fits the linear model
+fit <- eBayes(fit) # limma uses empirical Bayes
+result_lumA <- topTable(fit, n=639)
+topTable(fit)
+
+#Adjusted P-value < 0.05 and absolute log-fold-change > 1
+#summary(result)
+sum(result_lumA$P.Value < 0.05) 
+
+result_lumA[which.max(result_lumA$logFC),] # greatest FC
+result_lumA[which.min(result_lumA$logFC),] # smallest FC
+
+```
+
+
+# LumB TFs against all other TFs
+
+## Set up for DE
+```{r}
+ref_col <- data.frame(refColumn, row.names = 1)
+ref_vector <- c(ref_col[,1])
+
+# LumA = 2
+bool_lumA <- ref_vector == "LumA"
+bool_lumA <- as.numeric(bool_lumA) * 2
+# LumB = 1
+bool_lumB <- ref_vector == "LumB"
+bool_lumB <- as.numeric(bool_lumB)
+# Basal = 2
+bool_basal <- ref_vector == "Basal"
+bool_basal <- as.numeric(bool_basal) * 2
+# HER2 = 2
+bool_her2 <- ref_vector == "Her2"
+bool_her2 <- as.numeric(bool_her2) * 2
+# Normal = 2
+bool_norm <- ref_vector == "Normal"
+bool_norm <- as.numeric(bool_norm) * 2
+
+new_ref <- bool_norm + bool_lumA + bool_lumB + bool_basal + bool_her2
+new_ref <- as.factor(new_ref)
+colnames(exp_final) <- new_ref
+rownames(exp_final) <- TFs
+
+d_B <- DGEList(counts=exp_final, group = new_ref, genes = TFs)
+#d_B
+```
+
+```{r}
+## Pre-processing
+
+# Removes lowly expressed genes
+countsPerMillion <- cpm(d_B)
+countCheck <- countsPerMillion > 1
+keep <- which(rowSums(countCheck) >= 2)
+d_keep <- d_B[keep,]
+#summary(cpm(d_keep)) 
+# how many genes were removed? 639 - 
+
+
+# Normalization
+d_TMM <- calcNormFactors(d_keep, method="TMM")
+
+# plot of inter-sample relationships based on multidimentional scaling
+#plotMDS(d_TMM)
+
+## Setting up the Model
+# the design matrix describes the set up of the experiment
+
+design = model.matrix(object = ~new_ref)
+
+```
+
+## Run the DE analysis
+```{r}
+fit <- lmFit(exp_final, design) # fits the linear model
+fit <- eBayes(fit) # limma uses empirical Bayes
+result_lumB <- topTable(fit, n=639)
+topTable(fit)
+
+#Adjusted P-value < 0.05 and absolute log-fold-change > 1
+#summary(result)
+sum(result_lumB$P.Value < 0.05) 
+
+result_lumB[which.max(result_lumB$logFC),] # greatest FC
+result_lumB[which.min(result_lumB$logFC),] # smallest FC
+
+```
+
+# Basal TFs against all other TFs
+
+## Set up for DE
+```{r}
+ref_col <- data.frame(refColumn, row.names = 1)
+ref_vector <- c(ref_col[,1])
+
+# LumA = 2
+bool_lumA <- ref_vector == "LumA"
+bool_lumA <- as.numeric(bool_lumA) * 2
+# LumB = 2
+bool_lumB <- ref_vector == "LumB"
+bool_lumB <- as.numeric(bool_lumB) * 2
+# Basal = 1
+bool_basal <- ref_vector == "Basal"
+bool_basal <- as.numeric(bool_basal)
+# HER2 = 2
+bool_her2 <- ref_vector == "Her2"
+bool_her2 <- as.numeric(bool_her2) * 2
+# Normal = 2
+bool_norm <- ref_vector == "Normal"
+bool_norm <- as.numeric(bool_norm) * 2
+
+new_ref <- bool_norm + bool_lumA + bool_lumB + bool_basal + bool_her2
+new_ref <- as.factor(new_ref)
+colnames(exp_final) <- new_ref
+rownames(exp_final) <- TFs
+
+d_b <- DGEList(counts=exp_final, group = new_ref, genes = TFs)
+#d_b
+```
+
+```{r}
+## Pre-processing
+
+# Removes lowly expressed genes
+countsPerMillion <- cpm(d_b)
+countCheck <- countsPerMillion > 1
+keep <- which(rowSums(countCheck) >= 2)
+d_keep <- d_b[keep,]
+#summary(cpm(d_keep)) 
+# how many genes were removed? 639 - 
+
+
+# Normalization
+d_TMM <- calcNormFactors(d_keep, method="TMM")
+
+# plot of inter-sample relationships based on multidimentional scaling
+#plotMDS(d_TMM)
+
+## Setting up the Model
+# the design matrix describes the set up of the experiment
+
+design = model.matrix(object = ~new_ref)
+
+```
+
+## Run the DE analysis
+```{r}
+fit <- lmFit(exp_final, design) # fits the linear model
+fit <- eBayes(fit) # limma uses empirical Bayes
+result_basal <- topTable(fit, n=639)
+topTable(fit)
+
+#Adjusted P-value < 0.05 and absolute log-fold-change > 1
+#summary(result)
+sum(result_basal$P.Value < 0.05) 
+
+result_basal[which.max(result_basal$logFC),] # greatest FC
+result_basal[which.min(result_basal$logFC),] # smallest FC
+
+```
+
+# HER2 TFs against all other TFs
+
+## Set up for DE
+```{r}
+ref_col <- data.frame(refColumn, row.names = 1)
+ref_vector <- c(ref_col[,1])
+
+# LumA = 2
+bool_lumA <- ref_vector == "LumA"
+bool_lumA <- as.numeric(bool_lumA) * 2
+# LumB = 2
+bool_lumB <- ref_vector == "LumB"
+bool_lumB <- as.numeric(bool_lumB) * 2
+# Basal = 2
+bool_basal <- ref_vector == "Basal"
+bool_basal <- as.numeric(bool_basal) * 2
+# HER2 = 1
+bool_her2 <- ref_vector == "Her2"
+bool_her2 <- as.numeric(bool_her2)
+# Normal = 2
+bool_norm <- ref_vector == "Normal"
+bool_norm <- as.numeric(bool_norm) * 2
+
+new_ref <- bool_norm + bool_lumA + bool_lumB + bool_basal + bool_her2
+new_ref <- as.factor(new_ref)
+colnames(exp_final) <- new_ref
+rownames(exp_final) <- TFs
+
+d_H <- DGEList(counts=exp_final, group = new_ref, genes = TFs)
+#d_H
+```
+
+```{r}
+## Pre-processing
+
+# Removes lowly expressed genes
+countsPerMillion <- cpm(d_H)
+countCheck <- countsPerMillion > 1
+keep <- which(rowSums(countCheck) >= 2)
+d_keep <- d_H[keep,]
+#summary(cpm(d_keep)) 
+# how many genes were removed? 639 - 
+
+
+# Normalization
+d_TMM <- calcNormFactors(d_keep, method="TMM")
+
+# plot of inter-sample relationships based on multidimentional scaling
+#plotMDS(d_TMM)
+
+## Setting up the Model
+# the design matrix describes the set up of the experiment
+
+design = model.matrix(object = ~new_ref)
+
+```
+
+## Run the DE analysis
+```{r}
+fit <- lmFit(exp_final, design) # fits the linear model
+fit <- eBayes(fit) # limma uses empirical Bayes
+result_her2 <- topTable(fit, n=639)
+topTable(fit)
+
+#Adjusted P-value < 0.05 and absolute log-fold-change > 1
+#summary(result)
+sum(result_her2$P.Value < 0.05) 
+
+result_her2[which.max(result_her2$logFC),] # greatest FC
+result_her2[which.min(result_her2$logFC),] # smallest FC
+
+```
+
+# Normal-like TFs against all other TFs
+
+## Set up for DE
+```{r}
+ref_col <- data.frame(refColumn, row.names = 1)
+ref_vector <- c(ref_col[,1])
+
+# LumA = 2
+bool_lumA <- ref_vector == "LumA"
+bool_lumA <- as.numeric(bool_lumA) * 2
+# LumB = 2
+bool_lumB <- ref_vector == "LumB"
+bool_lumB <- as.numeric(bool_lumB) * 2
+# Basal = 2
+bool_basal <- ref_vector == "Basal"
+bool_basal <- as.numeric(bool_basal) * 2
+# HER2 = 2
+bool_her2 <- ref_vector == "Her2"
+bool_her2 <- as.numeric(bool_her2) * 2
+# Normal = 1
+bool_norm <- ref_vector == "Normal"
+bool_norm <- as.numeric(bool_norm)
+
+new_ref <- bool_norm + bool_lumA + bool_lumB + bool_basal + bool_her2
+new_ref <- as.factor(new_ref)
+colnames(exp_final) <- new_ref
+rownames(exp_final) <- TFs
+
+d_N <- DGEList(counts=exp_final, group = new_ref, genes = TFs)
+#d_N
+```
+
+```{r}
+## Pre-processing
+
+# Removes lowly expressed genes
+countsPerMillion <- cpm(d_N)
+countCheck <- countsPerMillion > 1
+keep <- which(rowSums(countCheck) >= 2)
+d_keep <- d_N[keep,]
+#summary(cpm(d_keep)) 
+# how many genes were removed? 639 - 
+
+
+# Normalization
+d_TMM <- calcNormFactors(d_keep, method="TMM")
+
+# plot of inter-sample relationships based on multidimentional scaling
+#plotMDS(d_TMM)
+
+## Setting up the Model
+# the design matrix describes the set up of the experiment
+
+design = model.matrix(object = ~new_ref)
+
+```
+
+## Run the DE analysis
+```{r}
+fit <- lmFit(exp_final, design) # fits the linear model
+fit <- eBayes(fit) # limma uses empirical Bayes
+result_norm <- topTable(fit, n=639)
+topTable(fit)
+
+#Adjusted P-value < 0.05 and absolute log-fold-change > 1
+#summary(result)
+sum(result_norm$P.Value < 0.05) 
+
+result_norm[which.max(result_norm$logFC),] # greatest FC
+result_norm[which.min(result_norm$logFC),] # smallest FC
+
+```
+
+######################################################
+```{r}
+## Creates data frame of expression
+all_exp <- TF_data[2:6]
+```
+
+## LumA TFs against all other TFs
+
+```{r}
+## Creates reference for LumA vs all
+
+genes <- rownames(all_exp)
+all_exp <-  matrix(unlist(all_exp), ncol = dim(all_exp)[2], byrow = TRUE)
+new_ref <- as.factor(c(1,2,2,2,2))
+d_A <- DGEList(counts=all_exp, group = new_ref, genes = genes)
+```
+
+```{r}
+## Filtering
+# keeps genes that are expressed by at least 1cpm in at least two samples
+
+countsPerMillion <- cpm(d_A)
+
+countCheck <- countsPerMillion > 1
+keep <- which(rowSums(countCheck) >= 2)
+d_keep <- d_A[keep,]
+#summary(cpm(d_keep)) #compare this to the original summary
+
+# how many genes were removed?
+28873 - 27458
+
+## Normalization
+# implements TMM normalization
+
+d_TMM <- calcNormFactors(d_keep, method="TMM")
+
+# plot of inter-sample relationships based on multidimentional scaling
+plotMDS(d_TMM)
+
+## Setting up the Model
+# the design matrix describes the set up of the experiment
+
+design = model.matrix(object = ~new_ref)
+
+## Estimates dispersion
+
+# gets common estimate across all genes
+diff_gene_List <- estimateGLMCommonDisp(d_TMM, design=design) 
+# fits an estimate based on mean-variance trend across the dataset (trended dispersion)
+diff_gene_List <- estimateGLMTrendedDisp(diff_gene_List, design=design) 
+# gets genewise dispersion (tagwise dispersion)
+diff_gene_List <- estimateGLMTagwiseDisp(diff_gene_List, design=design) 
+
+plotBCV(diff_gene_List)
+
+## Differential Expression
+
+f <- glmFit(diff_gene_List, design) # fits a NB log-linear model to the counts for each gene
+lrt_f <- glmLRT(f) # conducts genewise statistical tests for coefficients
+#topTags(lrt_f)
+
+#edgeR_results <- topTags(lrt_f)
+
+results <- topTags(lrt_f,n=644)$table # table of top DE genes
+
+lrt_f_cat <- glmLRT(f, coef=2)
+topTags(lrt_f_cat,n=644)$table
+
+```
+```{r}
+plot(results$FDR)
+```
+
+```{r}
+results_h["ERBB2"]
+```
+
+
+
+
+
+
+
+
+
+
+
+

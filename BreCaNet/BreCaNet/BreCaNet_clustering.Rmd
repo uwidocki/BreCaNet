@@ -1,0 +1,202 @@
+---
+title: "BreCaNet_clustering"
+author: "Ursula Widocki"
+date: "10/21/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+rm(list = ls())
+
+# https://www.bioconductor.org/packages/release/bioc/manuals/genefu/man/genefu.pdf
+# libraries to run geneFu
+
+library(genefu)
+library(xtable) 
+library(rmeta) 
+library(Biobase) 
+library(caret)
+
+#other libraries
+library(tidyverse)
+library(org.Hs.eg.db)
+
+```
+
+```{r}
+library(AIMS)
+```
+
+browseVignettes("AIMS")
+
+#```{r}
+# HowTo
+browseVignettes("genefu")
+#```
+
+```{r}
+# reads in the necessary data
+
+#geneExpFile = read.csv("/Users/ursulawidocki/Desktop/BreCaNet/Data/PANDAinput/PANDAgeneExp.txt", sep = "\t", header = FALSE) # reads in exp file
+
+# from TPM then filters
+geneExpFile2 = read.csv("/Users/ursulawidocki/Desktop/BreCaNet/Data/PANDAinput/PANDAgeneExp2.txt", sep = "\t", header = FALSE) # reads in exp file
+
+# only FPKM and then filters
+#geneExpFile3 = read.csv("/Users/ursulawidocki/Desktop/BreCaNet/Data/PANDAinput/PANDAgeneExp3.txt", sep = "\t", header = FALSE) # reads in exp file
+
+
+
+# need this for geneFu
+data(mod1)
+```
+
+```{r}
+# modified for processing3
+# preps data from expression file
+
+# prepares gene labels
+geneNames <- as.data.frame(geneExpFile3[,1]) # gets gene names
+colnames(geneNames) <- c("EntrezGene.ID") # adds gene header
+geneLab <- as.data.frame(as.character(seq(1:nrow(geneNames))))
+geneNames <- as.matrix(geneNames)
+rownames(geneNames) <- as.vector(geneNames)
+
+# prepares expression data
+data <- as.matrix(geneExpFile3[,2:dim(geneExpFile3)[2]]) # gets expression data
+data <- t(data) # makes genes columns and samples rows
+sampNames <- as.data.frame(as.character(seq(1:nrow(data))))
+rownames(data) <- rownames(sampNames) # adds row names to the data
+colnames(data) <- as.vector(geneNames) # adds column names to the data
+```
+
+```{r}
+# modified for processing2
+# preps data from expression file
+
+# prepares gene labels
+geneNames <- as.data.frame(geneExpFile2[,1]) # gets gene names
+colnames(geneNames) <- c("EntrezGene.ID") # adds gene header
+geneLab <- as.data.frame(as.character(seq(1:nrow(geneNames))))
+geneNames <- as.matrix(geneNames)
+rownames(geneNames) <- as.vector(geneNames)
+
+# prepares expression data
+data <- as.matrix(geneExpFile2[,2:dim(geneExpFile2)[2]]) # gets expression data
+data <- t(data) # makes genes columns and samples rows
+sampNames <- as.data.frame(as.character(seq(1:nrow(data))))
+rownames(data) <- rownames(sampNames) # adds row names to the data
+colnames(data) <- as.vector(geneNames) # adds column names to the data
+```
+
+```{r}
+# debugging
+
+dim(data)
+dim(sampNames)
+dim(geneNames)
+dim(geneLab)
+```
+
+# Kam's command to run: 
+scTransbig.exprs <- subtype.cluster(module.ESR1 = mod1$ESR1, 
+                                    module.ERBB2=mod1$ERBB2, 
+                                    module.AURKA = mod1$AURKA, data = new.exp, 
+                                    annot = annot.expos, do.mapping = F, do.scale = F, plot = T, verbose = T)  
+                                    
+                                    
+```{r}
+# debugging
+
+#rownames(data)
+#colnames(data)
+
+# checks if geneNames has unique elements
+class(geneNames)
+anyDuplicated(geneNames, incomparables = FALSE, MARGIN = 1, fromLast = FALSE,) # checks uniqueness of gene names
+
+
+```
+      
+```{r}
+# I think I want this command using AIMS
+subtypePred <- molecular.subtyping(sbt.model = "AIMS", data = data, annot = geneNames, do.mapping = F, verbose = F)
+
+```
+  
+```{r}
+subtypePred <- molecular.subtyping(sbt.model = "scmgene", data = data, annot = geneNames, do.mapping = F, verbose = F)
+```
+
+  
+  
+```{r}
+# I don't think this command is what I want
+
+subtype_expr <- subtype.cluster(module.ESR1 = mod1$ESR1, module.ERBB2 = mod1$ERBB2, module.AURKA = mod1$AURKA, data = data, annot = geneNames, do.mapping = F, do.scale = F, plot = T, verbose = T)
+
+```
+  
+
+#Get sample counts pertaining to each subtype
+table(SubtypePredictions$subtype)
+#Select samples pertaining to Basal Subtype Basals<-names(which(SubtypePredictions$subtype == "ER-/HER2-"))
+#Select samples pertaining to HER2 Subtype HER2s<-names(which(SubtypePredictions$subtype == "HER2+"))
+#Select samples pertaining to Luminal Subtypes LuminalB<-names(which(SubtypePredictions$subtype == "ER+/HER2- High Prolif")) LuminalA<-names(which(SubtypePredictions$subtype == "ER+/HER2- Low Prolif"))
+
+
+#ASSIGN SUBTYPES TO EVERY SAMPLE, ADD TO THE EXISTING PHENODATA
+ddemo$SCMOD2<-SubtypePredictions$subtype
+ddemo[LuminalB,]$SCMOD2<-"LumB"
+ddemo[LuminalA,]$SCMOD2<-"LumA"
+ddemo[Basals,]$SCMOD2<-"Basal"
+ddemo[HER2s,]$SCMOD2<-"Her2"
+
+
+########################################################################
+
+intrinsic.cluster()
+  fit a Single Sample Predictor (SSP) as in Perou, Sorlie, Hu, and Parker publications
+
+intrinsic.cluster.predict()
+  identify breast cancer molecular subtypes using the Single Sample Predictor (SSP)
+
+molecular.subtyping()
+  Function to identify breast cancer molecular subtypes using the Subtype Clustering Model
+  
+ps.cluster()
+  prediction strength of a clustering model
+
+
+  
+scmgene.robust()
+  Subtype Clustering Model using only ESR1, ERBB2 and AURKA genes for identification of breast cancer molecular subtypes
+  
+scmod1.robust()
+  Subtype Clustering Model using ESR1, ERBB2 and AURKA modules for identification of breast cancer molecular subtypes (Desmedt et al 2008)
+  
+scmod2.robust() 
+  Subtype Clustering Model using ESR1, ERBB2 and AURKA modules for identification of breast cancer molecular subtypes (Wirapati et al 2008)
+
+
+
+ssp2006()
+  SSP2006 classifier for identification of breast cancer molecular sub- types (Hu et al 2006)
+
+pam50()
+  parameters defining the PAM50 classifier for identification of breast cancer molecular subtypes
+
+
+### Older/ Obsolete functions
+
+subtype.cluster()
+  Function to fit the Subtype Clustering Model
+
+subtype.cluster.predict()
+  Function to identify breast cancer molecular subtypes using the Sub- type Clustering Model
+
+
+
+

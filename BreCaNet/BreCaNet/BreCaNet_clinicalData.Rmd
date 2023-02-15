@@ -1,0 +1,56 @@
+---
+title: "BreCaNet_clinicalData"
+author: "Ursula Widocki"
+date: "11/25/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+```
+
+```{r}
+# This reads a GDC manifest file and output sample IDs
+# Found tutorial on https://www.biostars.org/p/215175/
+# Had to update based on the new GDC host website https://docs.gdc.cancer.gov/API/Users_Guide/Search_and_Retrieval/
+# I ran on my laptop because the server cannot verify the website is secure and fails to run the curl command
+
+```
+
+```{r TCGA, include = FALSE}
+
+setwd("~/Desktop/BreCaNet/Data/sampleProcessed")
+manifest="gdc_manifest.txt"
+
+x=read.table(manifest,header = T)
+manifest_length= nrow(x)
+id= toString(sprintf('"%s"', x$id))
+
+Part1= '{"filters":{"op":"in","content":{"field":"files.file_id","value":[ '
+Part2= '] }},"format":"TSV","fields":"file_id,file_name,cases.submitter_id,cases.case_id,data_category,data_type,cases.samples.tumor_descriptor,cases.samples.tissue_type,cases.samples.sample_type,cases.samples.submitter_id,cases.samples.sample_id,cases.samples.portions.analytes.aliquots.aliquot_id,cases.samples.portions.analytes.aliquots.submitter_id","size":'
+Part3= paste(shQuote(manifest_length,type="cmd"),"}",sep="")
+Sentence= paste(Part1,id,Part2,Part3, collapse=" ")
+write.table(Sentence,"Payload.txt",quote=F,col.names=F,row.names=F)
+
+```
+
+```{r, include = FALSE}
+
+# imports the file of gene names
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

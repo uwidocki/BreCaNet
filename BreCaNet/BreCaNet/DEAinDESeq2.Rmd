@@ -1,0 +1,46 @@
+---
+title: "DEAinDESeq2"
+author: "Ursula Widocki"
+date: "4/19/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Citation:
+Love, M.I., Huber, W., Anders, S. (2014) Moderated estimation of fold change and dispersion for RNA-seq data with DESeq2. Genome Biology, 15:550. 10.1186/s13059-014-0550-8
+```{r}
+library(tidyverse)
+```
+
+```{r}
+## Reads in raw data
+
+ref_col_path = '/Users/ursulawidocki/Desktop/BreCaNet/Data/PANDAinput/all_labels.txt'
+all_expPath = '/Users/ursulawidocki/Desktop/BreCaNet/Data/PANDAinput/all_exp_HTSeq.txt'
+
+```
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

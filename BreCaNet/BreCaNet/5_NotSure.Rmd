@@ -1,0 +1,82 @@
+---
+title: "5_NotSure"
+author: "Ursula Widocki"
+date: "4/27/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+
+```{r}
+# create matrix where rows are genes examined and columns are PANDA networks
+#   values are PANDA edge sum
+
+#geom_tile
+RP5_1042I8 <- c(-31.727, 6.175, 103.318, 34.281, -105.321)
+RP1_47I22 <- c(-24.77, 46.55, -25.57, 21.41, -306.46)
+SLC39A11 <- c(316.46, 310.58, 343.57, 285.09, 336.63)
+GS1_124K5 <- c(-47.74, -17.21, -256.71, 30.99, 55.44)
+RP11_32D16 <- c(-131.59, -334.27, -141.99, -125.86, -78.11)
+ESR1 <- c(502.06, 465.08, 460.73, 494.33, 520.16)
+ERBB2 <- c(443.39, 379.21, 421.60, 362.87, 390.87)
+AURKA <- c(-69.64, 35.85, -124.42, 42.02, -84.32)
+BRCA1 <- c(533.81, 483.39, 476.44, 513.13, 449.88)
+BRCA2 <- c(416.78, 395.87, 417.14, 410.08, 339.26)
+
+heading <- c("LumA", "LumB", "Basal", "HER2", "Norm")
+
+matrix <- as.data.frame(rbind(RP5_1042I8, RP1_47I22, SLC39A11, GS1_124K5, RP11_32D16, ESR1, ERBB2, AURKA, BRCA1, BRCA2))
+colnames(matrix) <- heading
+rownames(matrix) <- c("RP5_1042I8", "RP1_47I22", "SLC39A11", "GS1_124K5", "RP11_32D16", "ESR1", "ERBB2", "AURKA", "BRCA1", "BRCA2")
+
+#matrix <- []
+
+```
+
+```{r}
+heatmap(as.matrix(matrix))
+```
+```{r}
+## Make a pie chart showing proportions of subtypes in sample population
+ref_col_path = '/Users/ursulawidocki/Desktop/BreCaNet/Data/PANDAinput/all_labels.txt' # reference column
+refColumn <- read.delim(ref_col_path, stringsAsFactors = F, check.names = T, header = F)
+#table(refColumn$V2)
+
+subtypes <- c("LumA", "LumB", "Basal", "HER2", "Normal-like")
+values <- c(423, 126, 101, 38, 26)
+prop <- c(59.24, 17.65, 14.15, 5.32, 3.64)
+subtype_df <- data.frame(subtypes, values, prop)
+
+subtype_df <- subtype_df %>%
+  arrange(desc(subtypes)) %>%
+  mutate(lab.ypos=cumsum(prop) - 0.5*prop)
+
+ggplot(subtype_df, aes(x = "", y = prop, fill = subtypes)) +
+  geom_bar(width = 1, stat = "identity", color = "black") +
+  coord_polar("y", start = 0)+
+  geom_text(aes(y = lab.ypos, label = prop), color = "black")+
+  theme_void()+
+  ggtitle("Proportion of Breast Cancer Subtypes")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
